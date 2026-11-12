@@ -1,256 +1,345 @@
 """
-Automated PDF Report Generator for Task 3: Airflow ETL Pipeline
+Automated Formal PDF Report Generator for Task 3: Building Airflow ETL Pipeline
 Author: Shaheer Chishti (23L-0994)
+Course: MLOps / Data Engineering
 """
-import os, sys, json, subprocess
+import os
+import sys
+import json
 from datetime import datetime
+from PIL import Image as PILImage
+
 sys.path.insert(0, '/home/shaheer/23L-0994_A2_Ops/venv/lib/python3.14/site-packages')
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                 TableStyle, PageBreak, HRFlowable, Preformatted)
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    PageBreak, HRFlowable, Preformatted, Image as RLImage, KeepTogether
+)
 
-OUTPUT = "23L-0994_Task3_Report.pdf"
+OUTPUT_PDF = "/home/shaheer/23L-0994_Task3_Airflow_ETL/23L-0994_Task3_Report.pdf"
+SCREENSHOTS_DIR = "/home/shaheer/23L-0994_Task3_Airflow_ETL/screenshots"
+
+
+def get_scaled_image(img_filename, target_width=6.6 * inch, max_height=4.2 * inch):
+    """Load an image, calculate aspect ratio, and return a scaled ReportLab Image flowable."""
+    img_path = os.path.join(SCREENSHOTS_DIR, img_filename)
+    if not os.path.exists(img_path):
+        raise FileNotFoundError(f"Missing screenshot: {img_path}")
+
+    with PILImage.open(img_path) as im:
+        orig_w, orig_h = im.size
+
+    aspect = orig_w / float(orig_h)
+    calc_height = target_width / aspect
+
+    if calc_height > max_height:
+        calc_height = max_height
+        target_width = calc_height * aspect
+
+    rl_img = RLImage(img_path, width=target_width, height=calc_height)
+    rl_img.hAlign = 'CENTER'
+    return rl_img
+
 
 def build_pdf():
-    doc = SimpleDocTemplate(OUTPUT, pagesize=letter,
-                            rightMargin=45, leftMargin=45, topMargin=45, bottomMargin=45)
-    styles = getSampleStyleSheet()
-    story = []
+    print(f"Generating Formal Submission Report: {OUTPUT_PDF}")
 
-    # Styles
-    title_style = ParagraphStyle('T', parent=styles['Heading1'],
-                                 fontName='Helvetica-Bold', fontSize=20, leading=26,
-                                 textColor=colors.HexColor('#1a1a2e'), spaceAfter=6)
-    h2 = ParagraphStyle('H2', parent=styles['Heading2'],
-                         fontName='Helvetica-Bold', fontSize=14,
-                         textColor=colors.HexColor('#16213e'), spaceAfter=4, spaceBefore=12)
-    h3 = ParagraphStyle('H3', parent=styles['Heading3'],
-                         fontName='Helvetica-Bold', fontSize=11,
-                         textColor=colors.HexColor('#0f3460'), spaceAfter=4, spaceBefore=8)
-    body = ParagraphStyle('B', parent=styles['Normal'], fontName='Helvetica',
-                           fontSize=10, leading=14, spaceAfter=4)
-    code_style = ParagraphStyle('C', parent=styles['Normal'], fontName='Courier',
-                                 fontSize=8, leading=11, backColor=colors.HexColor('#f4f4f4'),
-                                 leftIndent=12, rightIndent=12, spaceAfter=6, spaceBefore=6)
+    doc = SimpleDocTemplate(
+        OUTPUT_PDF,
+        pagesize=letter,
+        rightMargin=40,
+        leftMargin=40,
+        topMargin=40,
+        bottomMargin=40
+    )
+
+    styles = getSampleStyleSheet()
+
+    # Custom styling palette
+    title_style = ParagraphStyle(
+        'DocTitle',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',
+        fontSize=20,
+        leading=24,
+        textColor=colors.HexColor('#0f2b46'),
+        spaceAfter=4
+    )
+    subtitle_style = ParagraphStyle(
+        'DocSubTitle',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=12,
+        leading=16,
+        textColor=colors.HexColor('#3a506b'),
+        spaceAfter=10
+    )
+    h1_style = ParagraphStyle(
+        'SectionH1',
+        parent=styles['Heading2'],
+        fontName='Helvetica-Bold',
+        fontSize=13,
+        leading=17,
+        textColor=colors.HexColor('#0f2b46'),
+        spaceBefore=12,
+        spaceAfter=6,
+        keepWithNext=True
+    )
+    h2_style = ParagraphStyle(
+        'SectionH2',
+        parent=styles['Heading3'],
+        fontName='Helvetica-Bold',
+        fontSize=10.5,
+        leading=14,
+        textColor=colors.HexColor('#1b4965'),
+        spaceBefore=8,
+        spaceAfter=4,
+        keepWithNext=True
+    )
+    body_style = ParagraphStyle(
+        'DocBody',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=9,
+        leading=13,
+        textColor=colors.HexColor('#222222'),
+        spaceAfter=5
+    )
+    caption_style = ParagraphStyle(
+        'ImgCaption',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=8.5,
+        leading=11,
+        textColor=colors.HexColor('#1b4965'),
+        alignment=1, # Center
+        spaceBefore=4,
+        spaceAfter=10
+    )
+    code_snippet_style = ParagraphStyle(
+        'CodeSnippet',
+        parent=styles['Normal'],
+        fontName='Courier',
+        fontSize=7.5,
+        leading=10,
+        backColor=colors.HexColor('#f5f7fa'),
+        borderColor=colors.HexColor('#d0d7de'),
+        borderWidth=0.5,
+        borderPadding=6,
+        spaceBefore=4,
+        spaceAfter=6
+    )
 
     def hr():
-        return HRFlowable(width="100%", thickness=1, color=colors.HexColor('#cccccc'), spaceAfter=8, spaceBefore=8)
+        return HRFlowable(width="100%", thickness=1, color=colors.HexColor('#b0c4de'), spaceBefore=6, spaceAfter=8)
 
-    # Title Page
-    story.append(Paragraph("Task 3: Airflow ETL Pipeline", title_style))
-    story.append(Paragraph("Building a Currency Exchange ETL with Apache Airflow & MongoDB", h2))
+    story = []
+
+    # ==========================================
+    # COVER / HEADER
+    # ==========================================
+    story.append(Paragraph("Task 3: Building Airflow ETL Pipeline", title_style))
+    story.append(Paragraph("Automated Currency Exchange ETL Integration with MongoDB & Mongo Express", subtitle_style))
     story.append(hr())
-    meta = [
-        ["Student Name", "Shaheer Chishti"],
-        ["Roll No", "23L-0994"],
-        ["Course", "MLOps / Data Engineering"],
-        ["Submission Date", datetime.now().strftime("%B %d, %Y")],
-        ["GitHub Repo", "https://github.com/ChishtiShaheer/23L-0994_Task3_Airflow_ETL"],
+
+    meta_table_data = [
+        [Paragraph("<b>Student Name</b>", body_style), Paragraph("Shaheer Chishti", body_style),
+         Paragraph("<b>Roll Number</b>", body_style), Paragraph("23L-0994", body_style)],
+        [Paragraph("<b>Course</b>", body_style), Paragraph("MLOps / Data Engineering", body_style),
+         Paragraph("<b>Date</b>", body_style), Paragraph(datetime.now().strftime("%B %d, %Y"), body_style)],
+        [Paragraph("<b>GitHub Repo</b>", body_style), Paragraph("<a href='https://github.com/ChishtiShaheer/23L-0994_Task3_Airflow_ETL'><u>https://github.com/ChishtiShaheer/23L-0994_Task3_Airflow_ETL</u></a>", body_style),
+         Paragraph("<b>DagsHub Repo</b>", body_style), Paragraph("<a href='https://dagshub.com/ChishtiShaheer/23L-0994_Task3_Airflow_ETL'><u>https://dagshub.com/ChishtiShaheer/23L-0994_Task3_Airflow_ETL</u></a>", body_style)]
     ]
-    t = Table(meta, colWidths=[1.8*inch, 4*inch])
-    t.setStyle(TableStyle([
-        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
-        ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,-1), 10),
-        ('BACKGROUND', (0,0), (0,-1), colors.HexColor('#e8f4f8')),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
-        ('ROWBACKGROUNDS', (0,0), (-1,-1), [colors.white, colors.HexColor('#f9f9f9')]),
-        ('PADDING', (0,0), (-1,-1), 6),
-    ]))
-    story.append(t)
-    story.append(Spacer(1, 0.3*inch))
-
-    # Section 1: Overview
-    story.append(Paragraph("1. Assignment Overview", h2))
-    story.append(hr())
-    story.append(Paragraph(
-        "This task requires building an end-to-end ETL pipeline using Apache Airflow (via Astro CLI) "
-        "that extracts daily currency exchange rates from the Frankfurter API, transforms the data into "
-        "a standardized schema, and loads it into MongoDB. Data is passed between tasks using Airflow "
-        "Named XComs.", body))
-
-    story.append(Paragraph("API Used:", h3))
-    story.append(Paragraph("Frankfurter API — <b>https://api.frankfurter.dev/v2/rates?base=EUR&amp;quotes=USD,GBP,JPY</b>", body))
-
-    # Section 2: Architecture
-    story.append(PageBreak())
-    story.append(Paragraph("2. Pipeline Architecture", h2))
-    story.append(hr())
-    story.append(Paragraph("The pipeline consists of 3 sequential tasks connected via Named XComs:", body))
-
-    arch = [
-        ["Task", "ID", "Description", "XCom Key"],
-        ["Extract", "extract_currency_rates", "Call Frankfurter API, get EUR→USD/GBP/JPY rates", "raw_exchange_rate_data (push)"],
-        ["Transform", "transform_currency_data", "Map raw response to target schema", "transformed_exchange_rate_data (push)"],
-        ["Load", "load_data_into_mongodb", "Upsert transformed docs into MongoDB", "—"],
-    ]
-    at = Table(arch, colWidths=[0.8*inch, 1.8*inch, 2.5*inch, 2*inch])
-    at.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#16213e')),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTNAME', (0,1), (-1,-1), 'Helvetica'),
-        ('FONTSIZE', (0,0), (-1,-1), 9),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f0f4f8')]),
+    meta_table = Table(meta_table_data, colWidths=[1.1*inch, 2.6*inch, 1.1*inch, 2.4*inch])
+    meta_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f0f5fa')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#c3d9e8')),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e1ecf4')),
         ('PADDING', (0,0), (-1,-1), 5),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
     ]))
-    story.append(at)
-    story.append(Spacer(1, 0.2*inch))
+    story.append(meta_table)
+    story.append(Spacer(1, 10))
 
-    # Section 3: Docker Services
-    story.append(Paragraph("3. Docker Services Configuration", h2))
-    story.append(hr())
+    # ==========================================
+    # 1. EXECUTIVE SUMMARY & ARCHITECTURE
+    # ==========================================
+    story.append(Paragraph("1. Executive Summary & Pipeline Architecture", h1_style))
     story.append(Paragraph(
-        "All services run on a shared Docker bridge network (<b>airflow_etl_shared_network</b>). "
-        "MongoDB uses a named persistent volume (<b>task3_mongodb_persistent_storage</b>).", body))
+        "This project implements an end-to-end automated ETL pipeline engineered with Apache Airflow (via Astro CLI), "
+        "Frankfurter Currency Exchange API, MongoDB primary persistent storage, and Mongo Express web administration interface. "
+        "The architecture enforces modular design, persistent container storage, explicit Docker bridge networking, and "
+        "strict data transfer between tasks using <b>Airflow Named XComs</b>.", body_style))
 
-    svc = [
-        ["Service", "Image", "Port", "Role", "Labels"],
-        ["airflow-webserver", "apache/airflow:2.10.2", "8080", "Airflow UI", "project, student_id"],
-        ["airflow-scheduler", "apache/airflow:2.10.2", "—", "DAG scheduler", "project, student_id"],
-        ["postgres", "postgres:13", "5432", "Airflow metadata DB", "project, student_id"],
-        ["mongodb", "mongo:6.0", "27017", "ETL storage (persistent vol)", "project, student_id,\nservice_type, storage,\nnetworking"],
-        ["mongo-express", "mongo-express:1.0.2", "8081", "MongoDB admin UI", "project, student_id,\nservice_type, storage,\nnetworking"],
+    arch_rows = [
+        ["Phase", "Airflow Task ID", "Operator", "Data Transfer Mechanism", "Output Schema / Target"],
+        ["Extract", "extract_currency_rates", "PythonOperator", "Named XCom ('raw_exchange_rate_data')", "Raw JSON from Frankfurter API v2"],
+        ["Transform", "transform_currency_data", "PythonOperator", "Named XCom ('transformed_exchange_rate_data')", "Standardized 6-attribute documents"],
+        ["Load", "load_data_into_mongodb", "PythonOperator", "Pulls Named XCom", "MongoDB: currency_db.exchange_rates"]
     ]
-    st = Table(svc, colWidths=[1.3*inch, 1.5*inch, 0.6*inch, 1.5*inch, 2.1*inch])
-    st.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0f3460')),
+    arch_table = Table(arch_rows, colWidths=[0.8*inch, 1.8*inch, 1.1*inch, 2.1*inch, 1.4*inch])
+    arch_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0f2b46')),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTNAME', (0,1), (-1,-1), 'Helvetica'),
-        ('FONTSIZE', (0,0), (-1,-1), 8),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f0f4f8')]),
+        ('FONTSIZE', (0,0), (-1,0), 8),
+        ('FONTSIZE', (0,1), (-1,-1), 7.5),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#c3d9e8')),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f8fafc')]),
         ('PADDING', (0,0), (-1,-1), 4),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
     ]))
-    story.append(st)
+    story.append(arch_table)
+    story.append(Spacer(1, 8))
 
-    # Section 4: DAG Code
+    # Transformed data specification block
+    story.append(Paragraph("<b>Required Standardized Document Schema:</b>", h2_style))
+    story.append(Preformatted("""{
+  "base_currency": "EUR",
+  "target_currency": "USD",
+  "exchange_rate": 1.1122,
+  "rate_date": "2026-11-12",
+  "source": "Frankfurter API",
+  "retrieved_at": "2026-11-12T17:14:43"
+}""", code_snippet_style))
+
+    # ==========================================
+    # 2. SCREENSHOT 1 & 2: AIRFLOW DAG EXECUTION
+    # ==========================================
     story.append(PageBreak())
-    story.append(Paragraph("4. DAG Code", h2))
-    story.append(hr())
-
-    dag_code = open('/home/shaheer/23L-0994_Task3_Airflow_ETL/dags/currency_exchange_etl_dag.py').read()
-    # Split into sections
-    story.append(Paragraph("4.1 Extract Task", h3))
-    story.append(Preformatted('''def extract_currency_rates(**context):
-    """Calls Frankfurter API and pushes raw data via Named XCom."""
-    retrieved_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-    response = requests.get(FRANKFURTER_API_URL, timeout=15)
-    response.raise_for_status()
-    raw_data = response.json()
-    payload = {"raw_data": raw_data, "retrieved_at": retrieved_at, "source": "Frankfurter API"}
-    ti = context["ti"]
-    ti.xcom_push(key="raw_exchange_rate_data", value=payload)
-    return f"Extracted data at {retrieved_at}"''', code_style))
-
-    story.append(Paragraph("4.2 Transform Task", h3))
-    story.append(Preformatted('''def transform_currency_data(**context):
-    """Pulls raw data from XCom, maps to target schema, pushes transformed records."""
-    ti = context["ti"]
-    payload = ti.xcom_pull(key="raw_exchange_rate_data", task_ids="extract_currency_rates")
-    raw_data = payload["raw_data"]
-    transformed_records = []
-    for item in raw_data:   # Frankfurter v2 returns a list
-        transformed_records.append({
-            "base_currency":   item.get("base", "EUR"),
-            "target_currency": item.get("quote"),
-            "exchange_rate":   float(item.get("rate")),
-            "rate_date":       item.get("date"),
-            "source":          "Frankfurter API",
-            "retrieved_at":    payload["retrieved_at"]
-        })
-    ti.xcom_push(key="transformed_exchange_rate_data", value=transformed_records)
-    return transformed_records''', code_style))
-
-    story.append(Paragraph("4.3 Load Task", h3))
-    story.append(Preformatted('''def load_data_into_mongodb(**context):
-    """Pulls transformed records from XCom and upserts into MongoDB."""
-    ti = context["ti"]
-    records = ti.xcom_pull(key="transformed_exchange_rate_data", task_ids="transform_currency_data")
-    client = MongoClient(f"mongodb://{MONGO_USER}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/")
-    db = client[MONGO_DB]
-    collection = db[MONGO_COLLECTION]
-    collection.create_index([("base_currency",1),("target_currency",1),("rate_date",1)], unique=True)
-    for doc in records:
-        collection.update_one(
-            {"base_currency": doc["base_currency"],
-             "target_currency": doc["target_currency"], "rate_date": doc["rate_date"]},
-            {"$set": doc}, upsert=True)
-    client.close()
-    return f"Loaded {len(records)} records into MongoDB"''', code_style))
-
-    story.append(Paragraph("4.4 DAG Definition", h3))
-    story.append(Preformatted('''with DAG(
-    dag_id="currency_exchange_etl_pipeline",
-    schedule_interval="@daily",
-    start_date=datetime(2026, 11, 1),
-    catchup=False,
-    tags=["currency", "etl", "frankfurter", "mongodb", "23L-0994"],
-) as dag:
-    extract_task  = PythonOperator(task_id="extract_currency_rates",  python_callable=extract_currency_rates)
-    transform_task= PythonOperator(task_id="transform_currency_data", python_callable=transform_currency_data)
-    load_task     = PythonOperator(task_id="load_data_into_mongodb",  python_callable=load_data_into_mongodb)
-    extract_task >> transform_task >> load_task''', code_style))
-
-    # Section 5: Transformed Data Schema
-    story.append(PageBreak())
-    story.append(Paragraph("5. Transformed Data Schema", h2))
-    story.append(hr())
-    story.append(Paragraph("Each extracted rate is mapped to the following document schema before being loaded into MongoDB:", body))
-
-    # Live API data
-    import urllib.request
-    try:
-        with urllib.request.urlopen("https://api.frankfurter.dev/v2/rates?base=EUR&quotes=USD,GBP,JPY", timeout=10) as r:
-            api_response = json.loads(r.read())
-    except Exception as e:
-        api_response = [{"error": str(e)}]
-
-    story.append(Paragraph("Live API Response from Frankfurter:", h3))
-    story.append(Preformatted(json.dumps(api_response, indent=2), code_style))
-
-    # Build transformed records
-    retrieved_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-    transformed = []
-    if isinstance(api_response, list):
-        for item in api_response:
-            transformed.append({
-                "base_currency": item.get("base", "EUR"),
-                "target_currency": item.get("quote"),
-                "exchange_rate": item.get("rate"),
-                "rate_date": item.get("date"),
-                "source": "Frankfurter API",
-                "retrieved_at": retrieved_at
-            })
-
-    story.append(Paragraph("Transformed Records (ready to load):", h3))
-    story.append(Preformatted(json.dumps(transformed, indent=2), code_style))
-
-    # Section 6: docker-compose
-    story.append(PageBreak())
-    story.append(Paragraph("6. Docker Compose Configuration", h2))
-    story.append(hr())
-    dc_code = open('/home/shaheer/23L-0994_Task3_Airflow_ETL/docker-compose.yml').read()
-    story.append(Preformatted(dc_code[:3000], code_style))
-
-    # Section 7: Submission info
-    story.append(PageBreak())
-    story.append(Paragraph("7. Submission", h2))
-    story.append(hr())
+    story.append(Paragraph("2. Airflow DAG & Task Execution Verification", h1_style))
     story.append(Paragraph(
-        "<b>GitHub Repository:</b> https://github.com/ChishtiShaheer/23L-0994_Task3_Airflow_ETL", body))
-    story.append(Spacer(1, 0.1*inch))
-    story.append(Paragraph("All code has been committed and pushed to the repository. The pipeline was successfully verified end-to-end.", body))
+        "The DAG <code>currency_exchange_etl_pipeline</code> was scheduled and triggered. As captured below, "
+        "all three tasks successfully executed in sequence. The web UI displays the DAG state as active, healthy, and green.", body_style))
 
+    # Screenshot 1
+    story.append(get_scaled_image("1_airflow_dags_list.png", target_width=6.8*inch, max_height=2.8*inch))
+    story.append(Paragraph("Figure 1: Airflow Web UI — Active DAGs list showing 'currency_exchange_etl_pipeline' unpaused with successful runs.", caption_style))
+
+    story.append(Spacer(1, 6))
+
+    # Screenshot 2
+    story.append(get_scaled_image("2_airflow_graph_success.png", target_width=6.8*inch, max_height=3.2*inch))
+    story.append(Paragraph("Figure 2: Airflow Graph View — All three pipeline tasks ('extract_currency_rates' ➔ 'transform_currency_data' ➔ 'load_data_into_mongodb') in SUCCESS state.", caption_style))
+
+    # ==========================================
+    # 3. SCREENSHOT 3: AIRFLOW NAMED XCOM DATA PASSING
+    # ==========================================
+    story.append(PageBreak())
+    story.append(Paragraph("3. Named XCom Data Transfer Verification", h1_style))
+    story.append(Paragraph(
+        "Per assignment specifications, all task communication strictly utilizes <b>Airflow Named XComs</b>. "
+        "The extract task pushes raw API responses under key <code>raw_exchange_rate_data</code>. "
+        "The transform task pulls this key and pushes mapped records under <code>transformed_exchange_rate_data</code>. "
+        "The load task retrieves these transformed records directly from the named XCom before writing to MongoDB.", body_style))
+
+    # Screenshot 3
+    story.append(get_scaled_image("3_airflow_named_xcoms.png", target_width=6.8*inch, max_height=2.7*inch))
+    story.append(Paragraph("Figure 3: Airflow XCom Admin View — Showing verified keys 'raw_exchange_rate_data' and 'transformed_exchange_rate_data' in metadata store.", caption_style))
+
+    story.append(Paragraph("<b>Code Snippet — Named XCom Push and Pull Implementation:</b>", h2_style))
+    story.append(Preformatted("""# Task 1: Named XCom Push
+ti.xcom_push(key="raw_exchange_rate_data", value=payload)
+
+# Task 2: Named XCom Pull & Push
+payload = ti.xcom_pull(key="raw_exchange_rate_data", task_ids="extract_currency_rates")
+# ... data transformation ...
+ti.xcom_push(key="transformed_exchange_rate_data", value=transformed_records)
+
+# Task 3: Named XCom Pull
+records = ti.xcom_pull(key="transformed_exchange_rate_data", task_ids="transform_currency_data")""", code_snippet_style))
+
+    # ==========================================
+    # 4. SCREENSHOT 4 & 5: MONGODB & MONGO EXPRESS
+    # ==========================================
+    story.append(PageBreak())
+    story.append(Paragraph("4. MongoDB Storage & Mongo Express Administration Interface", h1_style))
+    story.append(Paragraph(
+        "MongoDB is configured as the primary persistent database, with Mongo Express deployed as a web administration interface. "
+        "The load task performs an idempotent upsert on compound key <code>(base_currency, target_currency, rate_date)</code>. "
+        "Both the Mongo Express UI and direct terminal queries verify the populated records matching the exact required schema.", body_style))
+
+    # Screenshot 4
+    story.append(get_scaled_image("4_mongo_express_ui.png", target_width=6.8*inch, max_height=3.1*inch))
+    story.append(Paragraph("Figure 4: Mongo Express Administration UI — Inspecting collection 'exchange_rates' under database 'currency_db' with loaded documents.", caption_style))
+
+    story.append(Spacer(1, 6))
+
+    # Screenshot 5
+    story.append(get_scaled_image("5_terminal_mongodb_records.png", target_width=6.8*inch, max_height=2.8*inch))
+    story.append(Paragraph("Figure 5: Terminal Output — Querying MongoDB directly via mongosh confirming documents containing base_currency, target_currency, exchange_rate, rate_date, source, and retrieved_at.", caption_style))
+
+    # ==========================================
+    # 5. SCREENSHOT 6: DOCKER SERVICES, NETWORKING & PERSISTENCE
+    # ==========================================
+    story.append(PageBreak())
+    story.append(Paragraph("5. Docker Container Infrastructure, Networking & Storage", h1_style))
+    story.append(Paragraph(
+        "All required metadata is embedded within the Docker compose architecture: "
+        "<br/>• <b>Docker Networking:</b> All services share <code>airflow_etl_shared_network</code> (custom bridge driver). "
+        "<br/>• <b>Persistent Storage:</b> MongoDB data is mapped to named volume <code>task3_mongodb_persistent_storage</code>, ensuring zero data loss across container restarts. "
+        "<br/>• <b>Metadata Labels:</b> Service type, student ID (<code>23L-0994</code>), networking, and storage labels are assigned to each container.", body_style))
+
+    # Screenshot 6
+    story.append(get_scaled_image("6_terminal_docker_meta.png", target_width=6.8*inch, max_height=1.8*inch))
+    story.append(Paragraph("Figure 6: Terminal Output — Verifying running Docker containers, persistent named volume 'task3_mongodb_persistent_storage', and shared bridge network.", caption_style))
+
+    docker_table_data = [
+        ["Service Name", "Docker Image", "Port Mapping", "Role in Pipeline", "Persistence"],
+        ["airflow-webserver", "airflow-etl-23l-0994", "8080:8080", "Airflow Web UI & Orchestration Monitor", "Stateless"],
+        ["airflow-scheduler", "airflow-etl-23l-0994", "Internal", "DAG Scheduler & Task Executor", "Stateless"],
+        ["postgres", "postgres:13", "5432:5432", "Airflow Metadata Database & XCom Store", "Persistent (volume)"],
+        ["mongodb", "mongo:6.0", "27017:27017", "Primary ETL Database (currency_db)", "Persistent Volume"],
+        ["mongo-express", "mongo-express:1.0.2", "8081:8081", "Web Administration Interface for MongoDB", "Stateless"]
+    ]
+    dt = Table(docker_table_data, colWidths=[1.3*inch, 1.4*inch, 0.9*inch, 2.3*inch, 1.3*inch])
+    dt.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1b4965')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 8),
+        ('FONTSIZE', (0,1), (-1,-1), 7.5),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#c3d9e8')),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#f8fafc')]),
+        ('PADDING', (0,0), (-1,-1), 4),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    story.append(dt)
+
+    # ==========================================
+    # 6. SUBMISSION & REPOSITORIES
+    # ==========================================
+    story.append(Spacer(1, 10))
+    story.append(Paragraph("6. Submission & Version Control Links", h1_style))
+    story.append(Paragraph(
+        "All pipeline source code, DAG scripts, Docker configurations, dependency manifests, and report generation utilities "
+        "are version controlled and published to the following public repositories:", body_style))
+
+    repo_data = [
+        ["Platform", "Repository URL", "Status"],
+        ["GitHub", "https://github.com/ChishtiShaheer/23L-0994_Task3_Airflow_ETL", "Pushed & Verified (Active)"],
+        ["DagsHub", "https://dagshub.com/ChishtiShaheer/23L-0994_Task3_Airflow_ETL", "Configured & Mirrored"]
+    ]
+    rt = Table(repo_data, colWidths=[1.2*inch, 4.4*inch, 1.6*inch])
+    rt.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0f2b46')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 8.5),
+        ('FONTSIZE', (0,1), (-1,-1), 8),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#c3d9e8')),
+        ('PADDING', (0,0), (-1,-1), 5),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    story.append(rt)
+
+    # Build the document
     doc.build(story)
-    print(f"Report generated: {OUTPUT}")
+    print(f"Successfully generated {OUTPUT_PDF}")
+
 
 if __name__ == "__main__":
     build_pdf()
