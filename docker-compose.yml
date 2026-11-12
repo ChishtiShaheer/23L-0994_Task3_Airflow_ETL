@@ -8,6 +8,7 @@ x-airflow-common: &airflow-common
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__FERNET_KEY: 'Wr4o2MrN5CIB7P8ZOwuKhvNH_S55AcX3g3KLItnj4Wg='
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
@@ -23,6 +24,7 @@ x-airflow-common: &airflow-common
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
+    - ./webserver_config.py:/opt/airflow/webserver_config.py
   networks:
     - airflow_etl_network
   depends_on:
