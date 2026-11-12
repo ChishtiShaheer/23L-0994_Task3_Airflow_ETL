@@ -1,0 +1,161 @@
+version: '3.8'
+
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: airflow-etl-23l-0994:latest
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY: 'Wr4o2MrN5CIB7P8ZOwuKhvNH_S55AcX3g3KLItnj4Wg='
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__WEBSERVER__SECRET_KEY: 'secret_key_23L0994'
+    AIRFLOW__WEBSERVER__DEFAULT_UI_TIMEZONE: 'Asia/Karachi'
+    MONGO_HOST: mongodb
+    MONGO_PORT: 27017
+    MONGO_USER: admin
+    MONGO_PASSWORD: password123
+    MONGO_DB: currency_db
+    MONGO_COLLECTION: exchange_rates
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+  networks:
+    - airflow_etl_network
+  depends_on:
+    postgres:
+      condition: service_healthy
+    mongodb:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_db_volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    networks:
+      - airflow_etl_network
+    labels:
+      project: "Airflow-ETL-Pipeline"
+      student_id: "23L-0994"
+
+  mongodb:
+    image: mongo:6.0
+    container_name: task3_mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_persistent_storage:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - airflow_etl_network
+    labels:
+      project: "Airflow-ETL-Pipeline"
+      student_id: "23L-0994"
+      service_type: "database"
+      storage: "persistent_volume"
+      networking: "shared_airflow_network"
+
+  mongo-express:
+    image: mongo-express:1.0.2-18
+    container_name: task3_mongo_express
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: password123
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - airflow_etl_network
+    labels:
+      project: "Airflow-ETL-Pipeline"
+      student_id: "23L-0994"
+      service_type: "admin_ui"
+      networking: "shared_airflow_network"
+      storage: "stateless"
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username admin \
+          --firstname Shaheer \
+          --lastname Chishti \
+          --role Admin \
+          --email shaheerchishti21@gmail.com \
+          --password admin
+    restart: "no"
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    labels:
+      project: "Airflow-ETL-Pipeline"
+      student_id: "23L-0994"
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --hostname $(hostname)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    labels:
+      project: "Airflow-ETL-Pipeline"
+      student_id: "23L-0994"
+
+networks:
+  airflow_etl_network:
+    name: airflow_etl_shared_network
+    driver: bridge
+
+volumes:
+  postgres_db_volume:
+    name: task3_postgres_db_volume
+  mongodb_persistent_storage:
+    name: task3_mongodb_persistent_storage
